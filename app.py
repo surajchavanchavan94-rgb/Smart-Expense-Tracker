@@ -1,22 +1,9 @@
-
-from flask import (
-    Flask,
-    render_template,
-    request,
-    redirect,
-    url_for,
-    flash,
-    session,
-    Response
-)
-from functools import wraps
-import sqlite3
-import csv
-import io
-from datetime import datetime, date
+from flask import Flask, render_template, request, redirect, url_for, flash, session
 from werkzeug.security import generate_password_hash, check_password_hash
+from functools import wraps
+from datetime import datetime, date
+import sqlite3
 import os
-
 
 # ============================================================
 # APP CONFIGURATION
@@ -24,37 +11,55 @@ import os
 
 app = Flask(__name__)
 
-app.secret_key = "smart-expense-tracker-final-secret-key"
+app.secret_key = os.environ.get(
+    "SECRET_KEY",
+    "smart-expense-tracker-secret-key-2026"
+)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
 DATABASE = os.path.join(BASE_DIR, "expenses.db")
 BUDGET_FILE = os.path.join(BASE_DIR, "budget.txt")
-
-
-# ============================================================
-# CONSTANTS
-# ============================================================
 
 CATEGORIES = [
     "Food",
     "Travel",
     "Shopping",
     "Bills",
-    "Education",
     "Entertainment",
     "Health",
+    "Education",
     "Other"
 ]
 
 
 # ============================================================
-# DATABASE CONNECTION
+# DATABASE
 # ============================================================
 
 def get_db():
     conn = sqlite3.connect(DATABASE)
     conn.row_factory = sqlite3.Row
     return conn
+
+
+def column_exists(conn, table_name, column_name):
+    columns = conn.execute(
+        f"PRAGMA table_info({table_name})"
+    ).fetchall()
+
+    return any(row["name"] == column_name for row in columns)
+
+
+def add_column_if_missing(conn, table_name, column_name, column_definition):
+    if not column_exists(conn, table_name, column_name):
+        try:
+            conn.execute(
+                f"ALTER TABLE {table_name} "
+                f"ADD COLUMN {column_name} {column_definition}"
+            )
+        except sqlite3.OperationalError:
+            pass
 
 
 # ============================================================
@@ -65,31 +70,37 @@ def init_db():
 
     conn = get_db()
 
-    # ---------------- USERS ----------------
+    # --------------------------------------------------------
+    # USERS TABLE
+    # --------------------------------------------------------
 
     conn.execute("""
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             username TEXT UNIQUE NOT NULL,
-            password TEXT
+            password TEXT,
+            password_hash TEXT
         )
     """)
 
-    # Add password_hash if an older database needs it
-    user_columns = [
-        row["name"]
-        for row in conn.execute("PRAGMA table_info(users)").fetchall()
-    ]
+    # Older database migration
+    add_column_if_missing(
+        conn,
+        "users",
+        "password",
+        "TEXT"
+    )
 
-    if "password_hash" not in user_columns:
-        try:
-            conn.execute(
-                "ALTER TABLE users ADD COLUMN password_hash TEXT"
-            )
-        except sqlite3.OperationalError:
-            pass
+    add_column_if_missing(
+        conn,
+        "users",
+        "password_hash",
+        "TEXT"
+    )
 
-    # ---------------- EXPENSES ----------------
+    # --------------------------------------------------------
+    # EXPENSES TABLE
+    # --------------------------------------------------------
 
     conn.execute("""
         CREATE TABLE IF NOT EXISTS expenses (
@@ -104,54 +115,59 @@ def init_db():
         )
     """)
 
-    expense_columns = [
-        row["name"]
-        for row in conn.execute("PRAGMA table_info(expenses)").fetchall()
-    ]
+    # Migration for older databases
+    add_column_if_missing(
+        conn,
+        "expenses",
+        "amount",
+        "REAL"
+    )
 
-    # Add missing columns to old databases
-    if "created_at" not in expense_columns:
-        conn.execute(
-            "ALTER TABLE expenses ADD COLUMN created_at TEXT"
-        )
+    add_column_if_missing(
+        conn,
+        "expenses",
+        "category",
+        "TEXT"
+    )
 
-        conn.execute("""
-            UPDATE expenses
-            SET created_at = ?
-            WHERE created_at IS NULL
-        """, (
-            datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        ))
+    add_column_if_missing(
+        conn,
+        "expenses",
+        "description",
+        "TEXT"
+    )
 
-    if "user_id" not in expense_columns:
-        conn.execute(
-            "ALTER TABLE expenses ADD COLUMN user_id INTEGER"
-        )
+    add_column_if_missing(
+        conn,
+        "expenses",
+        "expense_date",
+        "TEXT"
+    )
 
-    if "description" not in expense_columns:
-        conn.execute(
-            "ALTER TABLE expenses ADD COLUMN description TEXT"
-        )
+    add_column_if_missing(
+        conn,
+        "expenses",
+        "created_at",
+        "TEXT"
+    )
 
-    if "expense_date" not in expense_columns:
-        conn.execute(
-            "ALTER TABLE expenses ADD COLUMN expense_date TEXT"
-        )
+    add_column_if_missing(
+        conn,
+        "expenses",
+        "user_id",
+        "INTEGER"
+    )
 
-        conn.execute("""
-            UPDATE expenses
-            SET expense_date = ?
-            WHERE expense_date IS NULL
-        """, (
-            date.today().isoformat(),
-        ))
+    add_column_if_missing(
+        conn,
+        "expenses",
+        "name",
+        "TEXT"
+    )
 
-    if "name" not in expense_columns:
-        conn.execute(
-            "ALTER TABLE expenses ADD COLUMN name TEXT"
-        )
-
-    # ---------------- BUDGETS ----------------
+    # --------------------------------------------------------
+    # BUDGET TABLE
+    # --------------------------------------------------------
 
     conn.execute("""
         CREATE TABLE IF NOT EXISTS budgets (
@@ -161,7 +177,9 @@ def init_db():
         )
     """)
 
-    # ---------------- DEFAULT ADMIN ----------------
+    # --------------------------------------------------------
+    # DEFAULT ADMIN USER
+    # --------------------------------------------------------
 
     admin = conn.execute(
         "SELECT * FROM users WHERE username = ?",
@@ -184,53 +202,53 @@ def init_db():
 
     else:
 
-        # Make sure old admin has a usable password
-        if "password_hash" in user_columns:
+        password_hash = generate_password_hash("admin123")
 
-            if not admin["password_hash"]:
-                password_hash = generate_password_hash("admin123")
+        try:
+            conn.execute("""
+                UPDATE users
+                SET password_hash = ?
+                WHERE username = 'admin'
+            """, (password_hash,))
+        except Exception:
+            pass
 
-                try:
-                    conn.execute("""
-                        UPDATE users
-                        SET password_hash = ?
-                        WHERE username = 'admin'
-                    """, (password_hash,))
-                except Exception:
-                    pass
-
-        if "password" in user_columns:
-
-            try:
-                if not admin["password"]:
-                    password_hash = generate_password_hash("admin123")
-
-                    conn.execute("""
-                        UPDATE users
-                        SET password = ?
-                        WHERE username = 'admin'
-                    """, (password_hash,))
-            except Exception:
-                pass
+        try:
+            conn.execute("""
+                UPDATE users
+                SET password = ?
+                WHERE username = 'admin'
+            """, (password_hash,))
+        except Exception:
+            pass
 
     conn.commit()
     conn.close()
 
 
 # ============================================================
+# IMPORTANT FOR RENDER / GUNICORN
+# ============================================================
+
+# This runs when Gunicorn imports app.py.
+# Therefore SQLite tables are created on Render too.
+
+init_db()
+
+
+# ============================================================
 # LOGIN REQUIRED
 # ============================================================
 
-def login_required(func):
+def login_required(function):
 
-    @wraps(func)
+    @wraps(function)
     def wrapper(*args, **kwargs):
 
         if "user_id" not in session:
-            flash("Please login first.", "error")
             return redirect(url_for("login"))
 
-        return func(*args, **kwargs)
+        return function(*args, **kwargs)
 
     return wrapper
 
@@ -253,19 +271,10 @@ def get_budget(user_id):
     if row:
         return float(row["amount"] or 0)
 
-    # Backward compatibility with budget.txt
-    try:
-        if os.path.exists(BUDGET_FILE):
-            with open(BUDGET_FILE, "r") as file:
-                value = float(file.read().strip() or 0)
-                return value
-    except Exception:
-        pass
-
     return 0.0
 
 
-def save_budget(user_id, amount):
+def set_user_budget(user_id, amount):
 
     conn = get_db()
 
@@ -299,174 +308,81 @@ def save_budget(user_id, amount):
     conn.commit()
     conn.close()
 
-    try:
-        with open(BUDGET_FILE, "w") as file:
-            file.write(str(amount))
-    except Exception:
-        pass
-
 
 # ============================================================
 # DASHBOARD CALCULATIONS
 # ============================================================
 
-def calculate_dashboard(user_id, search_query=""):
+def calculate_dashboard(user_id):
 
     conn = get_db()
 
-    # ---------------- EXPENSES ----------------
-
-    if search_query:
-
-        like_query = f"%{search_query}%"
-
-        expenses = conn.execute("""
-            SELECT *
-            FROM expenses
-            WHERE user_id = ?
-            AND (
-                name LIKE ?
-                OR category LIKE ?
-                OR description LIKE ?
-            )
-            ORDER BY expense_date DESC, id DESC
-        """, (
-            user_id,
-            like_query,
-            like_query,
-            like_query
-        )).fetchall()
-
-    else:
-
-        expenses = conn.execute("""
-            SELECT *
-            FROM expenses
-            WHERE user_id = ?
-            ORDER BY expense_date DESC, id DESC
-        """, (user_id,)).fetchall()
-
-    # ---------------- TOTAL ----------------
-
-    total_row = conn.execute("""
-        SELECT COALESCE(SUM(amount), 0) AS total
+    expenses = conn.execute("""
+        SELECT *
         FROM expenses
         WHERE user_id = ?
-    """, (user_id,)).fetchone()
+        ORDER BY expense_date DESC, id DESC
+    """, (user_id,)).fetchall()
 
-    total_expense = float(total_row["total"] or 0)
+    # --------------------------------------------------------
+    # TOTAL EXPENSE
+    # --------------------------------------------------------
 
-    # ---------------- AVERAGE ----------------
+    total_expense = sum(
+        float(row["amount"] or 0)
+        for row in expenses
+    )
 
-    average_row = conn.execute("""
-        SELECT COALESCE(AVG(amount), 0) AS average
-        FROM expenses
-        WHERE user_id = ?
-    """, (user_id,)).fetchone()
+    # --------------------------------------------------------
+    # TODAY
+    # --------------------------------------------------------
 
-    average_expense = float(average_row["average"] or 0)
+    today_string = date.today().strftime("%Y-%m-%d")
 
-    # ---------------- HIGHEST ----------------
+    today_expense = sum(
+        float(row["amount"] or 0)
+        for row in expenses
+        if str(row["expense_date"])[:10] == today_string
+    )
 
-    highest_row = conn.execute("""
-        SELECT name, amount
-        FROM expenses
-        WHERE user_id = ?
-        ORDER BY amount DESC
-        LIMIT 1
-    """, (user_id,)).fetchone()
+    # --------------------------------------------------------
+    # CURRENT MONTH
+    # --------------------------------------------------------
 
-    if highest_row:
+    current_month_string = datetime.now().strftime("%Y-%m")
 
-        highest_expense = float(highest_row["amount"] or 0)
-        highest_expense_name = highest_row["name"] or "Unknown"
+    current_month_total = sum(
+        float(row["amount"] or 0)
+        for row in expenses
+        if str(row["expense_date"])[:7] == current_month_string
+    )
 
-    else:
-
-        highest_expense = 0.0
-        highest_expense_name = "No expense"
-
-    # ---------------- TOP CATEGORY ----------------
-
-    top_category_row = conn.execute("""
-        SELECT category, SUM(amount) AS total
-        FROM expenses
-        WHERE user_id = ?
-        GROUP BY category
-        ORDER BY total DESC
-        LIMIT 1
-    """, (user_id,)).fetchone()
-
-    if top_category_row:
-
-        top_category = top_category_row["category"]
-        top_category_amount = float(
-            top_category_row["total"] or 0
-        )
-
-    else:
-
-        top_category = "None"
-        top_category_amount = 0.0
-
-    # ---------------- CURRENT MONTH ----------------
+    # --------------------------------------------------------
+    # PREVIOUS MONTH
+    # --------------------------------------------------------
 
     now = datetime.now()
 
-    current_month = now.strftime("%B %Y")
-    current_month_key = now.strftime("%Y-%m")
-
-    current_month_row = conn.execute("""
-        SELECT COALESCE(SUM(amount), 0) AS total
-        FROM expenses
-        WHERE user_id = ?
-        AND substr(expense_date, 1, 7) = ?
-    """, (
-        user_id,
-        current_month_key
-    )).fetchone()
-
-    current_month_total = float(
-        current_month_row["total"] or 0
-    )
-
-    # ---------------- PREVIOUS MONTH ----------------
-
     if now.month == 1:
-
         previous_year = now.year - 1
-        previous_month_number = 12
-
+        previous_month = 12
     else:
-
         previous_year = now.year
-        previous_month_number = now.month - 1
+        previous_month = now.month - 1
 
-    previous_month_key = (
-        f"{previous_year:04d}-{previous_month_number:02d}"
+    previous_month_string = (
+        f"{previous_year:04d}-{previous_month:02d}"
     )
 
-    previous_month_name = datetime(
-        previous_year,
-        previous_month_number,
-        1
-    ).strftime("%B %Y")
-
-    previous_month_row = conn.execute("""
-        SELECT COALESCE(SUM(amount), 0) AS total
-        FROM expenses
-        WHERE user_id = ?
-        AND substr(expense_date, 1, 7) = ?
-    """, (
-        user_id,
-        previous_month_key
-    )).fetchone()
-
-    previous_month_total = float(
-        previous_month_row["total"] or 0
+    previous_month_total = sum(
+        float(row["amount"] or 0)
+        for row in expenses
+        if str(row["expense_date"])[:7] == previous_month_string
     )
 
-    # ---------------- MONTHLY CHANGE ----------------
+    # --------------------------------------------------------
+    # CHANGE
+    # --------------------------------------------------------
 
     change_amount = (
         current_month_total - previous_month_total
@@ -480,92 +396,128 @@ def calculate_dashboard(user_id, search_query=""):
 
     else:
 
-        change_percentage = 100.0 if current_month_total > 0 else 0.0
+        change_percentage = 0
 
-    # ---------------- TODAY ----------------
+    # --------------------------------------------------------
+    # AVERAGE
+    # --------------------------------------------------------
 
-    today_key = date.today().isoformat()
+    if expenses:
 
-    today_row = conn.execute("""
-        SELECT COALESCE(SUM(amount), 0) AS total
-        FROM expenses
-        WHERE user_id = ?
-        AND expense_date = ?
-    """, (
-        user_id,
-        today_key
-    )).fetchone()
-
-    today_total = float(today_row["total"] or 0)
-
-    # ---------------- CATEGORY DATA ----------------
-
-    category_rows = conn.execute("""
-        SELECT category, SUM(amount) AS total
-        FROM expenses
-        WHERE user_id = ?
-        GROUP BY category
-        ORDER BY total DESC
-    """, (user_id,)).fetchall()
-
-    category_totals_map = {
-        row["category"]: float(row["total"] or 0)
-        for row in category_rows
-    }
-
-    # IMPORTANT:
-    # Always send all categories to index.html
-    category_labels = CATEGORIES.copy()
-
-    category_totals = [
-        category_totals_map.get(category, 0)
-        for category in category_labels
-    ]
-
-    # ---------------- MONTHLY DATA ----------------
-
-    monthly_rows = conn.execute("""
-        SELECT
-            substr(expense_date, 1, 7) AS month_key,
-            SUM(amount) AS total
-        FROM expenses
-        WHERE user_id = ?
-        GROUP BY substr(expense_date, 1, 7)
-        ORDER BY month_key ASC
-        LIMIT 12
-    """, (user_id,)).fetchall()
-
-    monthly_labels = []
-
-    monthly_totals = []
-
-    for row in monthly_rows:
-
-        try:
-            month_date = datetime.strptime(
-                row["month_key"],
-                "%Y-%m"
-            )
-
-            monthly_labels.append(
-                month_date.strftime("%b %Y")
-            )
-
-        except Exception:
-
-            monthly_labels.append(
-                row["month_key"]
-            )
-
-        monthly_totals.append(
-            float(row["total"] or 0)
+        average_expense = (
+            total_expense / len(expenses)
         )
 
-    conn.close()
+    else:
 
-    # ---------------- BUDGET ----------------
+        average_expense = 0
 
-    monthly_budget = get_budget(user_id)
+    # --------------------------------------------------------
+    # HIGHEST EXPENSE
+    # --------------------------------------------------------
+
+    highest_expense = 0
+    highest_expense_name = "None"
+
+    if expenses:
+
+        highest_row = max(
+            expenses,
+            key=lambda x: float(x["amount"] or 0)
+        )
+
+        highest_expense = float(
+            highest_row["amount"] or 0
+        )
+
+        highest_expense_name = (
+            highest_row["description"]
+            or highest_row["name"]
+            or "Expense"
+        )
+
+    # --------------------------------------------------------
+    # CATEGORY TOTALS
+    # --------------------------------------------------------
+
+    category_totals = {}
+
+    for row in expenses:
+
+        category = row["category"] or "Other"
+
+        amount = float(row["amount"] or 0)
+
+        category_totals[category] = (
+            category_totals.get(category, 0)
+            + amount
+        )
+
+    if category_totals:
+
+        top_category = max(
+            category_totals,
+            key=category_totals.get
+        )
+
+        top_category_amount = category_totals[
+            top_category
+        ]
+
+    else:
+
+        top_category = "None"
+        top_category_amount = 0
+
+    # --------------------------------------------------------
+    # MONTHLY DATA - LAST 6 MONTHS
+    # --------------------------------------------------------
+
+    monthly_labels = []
+    monthly_totals = []
+
+    year = now.year
+    month = now.month
+
+    for i in range(5, -1, -1):
+
+        m = month - i
+        y = year
+
+        while m <= 0:
+            m += 12
+            y -= 1
+
+        month_key = f"{y:04d}-{m:02d}"
+
+        month_total = sum(
+            float(row["amount"] or 0)
+            for row in expenses
+            if str(row["expense_date"])[:7] == month_key
+        )
+
+        month_name = datetime(
+            y,
+            m,
+            1
+        ).strftime("%b %Y")
+
+        monthly_labels.append(month_name)
+        monthly_totals.append(round(month_total, 2))
+
+    # --------------------------------------------------------
+    # BUDGET
+    # --------------------------------------------------------
+
+    budget_row = conn.execute(
+        "SELECT amount FROM budgets WHERE user_id = ?",
+        (user_id,)
+    ).fetchone()
+
+    monthly_budget = (
+        float(budget_row["amount"] or 0)
+        if budget_row else 0
+    )
 
     budget_used = current_month_total
 
@@ -579,101 +531,120 @@ def calculate_dashboard(user_id, search_query=""):
 
         budget_percentage = 0
 
-    budget_remaining = monthly_budget - budget_used
-
-    if budget_remaining < 0:
-        budget_remaining = 0
+    budget_remaining = (
+        monthly_budget - budget_used
+    )
 
     if monthly_budget <= 0:
 
-        budget_status = "none"
+        budget_status = "No Budget"
 
-    elif budget_percentage >= 100:
+    elif budget_percentage < 70:
 
-        budget_status = "danger"
+        budget_status = "safe"
 
-    elif budget_percentage >= 75:
+    elif budget_percentage < 90:
 
         budget_status = "warning"
 
     else:
 
-        budget_status = "safe"
+        budget_status = "danger"
 
-    # ---------------- SMART INSIGHT ----------------
+    # --------------------------------------------------------
+    # SMART INSIGHT
+    # --------------------------------------------------------
 
-    if total_expense <= 0:
+    if not expenses:
 
         smart_insight = (
-            "No expenses recorded yet. "
-            "Start adding your expenses to get smart insights."
+            "Start adding expenses to get smart insights."
         )
 
     elif top_category != "None":
 
         smart_insight = (
             f"Your highest spending category is "
-            f"{top_category} with "
-            f"₹{top_category_amount:.2f} spent."
+            f"{top_category} with ₹{top_category_amount:.2f}."
         )
 
     else:
 
-        smart_insight = "Keep tracking your expenses regularly."
+        smart_insight = "Keep tracking your expenses."
 
-    # ---------------- EXPENSE ALERT ----------------
+    # --------------------------------------------------------
+    # EXPENSE ALERT
+    # --------------------------------------------------------
 
-    if previous_month_total <= 0 and current_month_total > 0:
-
-        expense_alert = (
-            "You have started spending this month. "
-            "Keep an eye on your budget."
-        )
-
-    elif change_percentage > 20:
+    if change_percentage > 20:
 
         expense_alert = (
-            "⚠️ Your expenses are significantly higher "
-            "than the previous month."
+            "Your spending increased significantly "
+            "compared with last month."
         )
 
     elif change_percentage < -20:
 
         expense_alert = (
-            "✅ Great! Your expenses are lower "
-            "than the previous month."
+            "Great! Your spending is lower "
+            "than last month."
         )
 
     else:
 
         expense_alert = (
-            "Your spending is relatively stable "
-            "compared with the previous month."
+            "Your spending is currently stable."
         )
+
+    conn.close()
 
     return {
         "expenses": expenses,
-        "total_expense": total_expense,
-        "average_expense": average_expense,
-        "highest_expense": highest_expense,
+        "total_expense": round(total_expense, 2),
+        "average_expense": round(average_expense, 2),
+        "highest_expense": round(highest_expense, 2),
         "highest_expense_name": highest_expense_name,
         "top_category": top_category,
-        "top_category_amount": top_category_amount,
-        "current_month": current_month,
-        "current_month_total": current_month_total,
-        "previous_month": previous_month_name,
-        "previous_month_total": previous_month_total,
-        "change_amount": change_amount,
-        "change_percentage": change_percentage,
-        "today_total": today_total,
-        "categories": category_labels,
+        "top_category_amount": round(
+            top_category_amount,
+            2
+        ),
         "category_totals": category_totals,
         "monthly_labels": monthly_labels,
         "monthly_totals": monthly_totals,
-        "monthly_budget": monthly_budget,
-        "budget_used": budget_used,
-        "budget_remaining": budget_remaining,
-        "budget_percentage": budget_percentage,
+        "today_expense": round(today_expense, 2),
+        "current_month_total": round(
+            current_month_total,
+            2
+        ),
+        "previous_month_total": round(
+            previous_month_total,
+            2
+        ),
+        "change_amount": round(
+            change_amount,
+            2
+        ),
+        "change_percentage": round(
+            change_percentage,
+            2
+        ),
+        "monthly_budget": round(
+            monthly_budget,
+            2
+        ),
+        "budget_used": round(
+            budget_used,
+            2
+        ),
+        "budget_remaining": round(
+            budget_remaining,
+            2
+        ),
+        "budget_percentage": round(
+            budget_percentage,
+            2
+        ),
         "budget_status": budget_status,
         "smart_insight": smart_insight,
         "expense_alert": expense_alert
@@ -688,21 +659,18 @@ def calculate_dashboard(user_id, search_query=""):
 @login_required
 def home():
 
-    search_query = request.args.get(
-        "q",
-        ""
-    ).strip()
+    user_id = session["user_id"]
 
-    data = calculate_dashboard(
-        session["user_id"],
-        search_query
-    )
+    data = calculate_dashboard(user_id)
 
     return render_template(
         "index.html",
-        username=session.get("username", "User"),
-        today_date=date.today().isoformat(),
-        search_query=search_query,
+        categories=CATEGORIES,
+        category_data=data["category_totals"],
+        monthly_data={
+            "labels": data["monthly_labels"],
+            "totals": data["monthly_totals"]
+        },
         **data
     )
 
@@ -716,22 +684,33 @@ def login():
 
     if request.method == "POST":
 
-        username = request.form.get(
-            "username",
-            ""
+        username = (
+            request.form.get("username")
+            or request.form.get("email")
+            or ""
         ).strip()
 
-        password = request.form.get(
-            "password",
-            ""
+        password = (
+            request.form.get("password")
+            or ""
         )
+
+        if not username or not password:
+
+            flash(
+                "Please enter username and password.",
+                "error"
+            )
+
+            return render_template("login.html")
 
         conn = get_db()
 
-        user = conn.execute(
-            "SELECT * FROM users WHERE username = ?",
-            (username,)
-        ).fetchone()
+        user = conn.execute("""
+            SELECT *
+            FROM users
+            WHERE username = ?
+        """, (username,)).fetchone()
 
         conn.close()
 
@@ -742,62 +721,45 @@ def login():
                 "error"
             )
 
-            return redirect(url_for("login"))
+            return render_template("login.html")
+
+        stored_password_hash = (
+            user["password_hash"]
+            or user["password"]
+        )
 
         valid_password = False
 
-        # password_hash column
-        try:
-
-            password_hash = user["password_hash"]
-
-            if password_hash:
-                valid_password = check_password_hash(
-                    password_hash,
-                    password
-                )
-
-        except Exception:
-            pass
-
-        # old password column
-        if not valid_password:
+        if stored_password_hash:
 
             try:
 
-                stored_password = user["password"]
-
-                if stored_password:
-
-                    try:
-
-                        valid_password = check_password_hash(
-                            stored_password,
-                            password
-                        )
-
-                    except Exception:
-
-                        valid_password = (
-                            stored_password == password
-                        )
+                valid_password = check_password_hash(
+                    stored_password_hash,
+                    password
+                )
 
             except Exception:
-                pass
 
-        if valid_password:
+                valid_password = (
+                    stored_password_hash == password
+                )
 
-            session.clear()
+        if not valid_password:
 
-            session["user_id"] = user["id"]
-            session["username"] = user["username"]
+            flash(
+                "Invalid username or password.",
+                "error"
+            )
 
-            return redirect(url_for("home"))
+            return render_template("login.html")
 
-        flash(
-            "Invalid username or password.",
-            "error"
-        )
+        session.clear()
+
+        session["user_id"] = user["id"]
+        session["username"] = user["username"]
+
+        return redirect(url_for("home"))
 
     return render_template("login.html")
 
@@ -811,19 +773,21 @@ def register():
 
     if request.method == "POST":
 
-        username = request.form.get(
-            "username",
-            ""
+        username = (
+            request.form.get("username")
+            or request.form.get("email")
+            or ""
         ).strip()
 
-        password = request.form.get(
-            "password",
-            ""
+        password = (
+            request.form.get("password")
+            or ""
         )
 
-        confirm_password = request.form.get(
-            "confirm_password",
-            ""
+        confirm_password = (
+            request.form.get("confirm_password")
+            or request.form.get("confirm")
+            or ""
         )
 
         if not username or not password:
@@ -833,16 +797,25 @@ def register():
                 "error"
             )
 
-            return redirect(url_for("register"))
+            return render_template("register.html")
 
-        if password != confirm_password:
+        if len(password) < 4:
+
+            flash(
+                "Password must contain at least 4 characters.",
+                "error"
+            )
+
+            return render_template("register.html")
+
+        if confirm_password and password != confirm_password:
 
             flash(
                 "Passwords do not match.",
                 "error"
             )
 
-            return redirect(url_for("register"))
+            return render_template("register.html")
 
         password_hash = generate_password_hash(password)
 
@@ -861,10 +834,9 @@ def register():
             ))
 
             conn.commit()
-            conn.close()
 
             flash(
-                "Registration successful! Please login.",
+                "Registration successful. Please login.",
                 "success"
             )
 
@@ -872,14 +844,16 @@ def register():
 
         except sqlite3.IntegrityError:
 
-            conn.close()
-
             flash(
                 "Username already exists.",
                 "error"
             )
 
-            return redirect(url_for("register"))
+            return render_template("register.html")
+
+        finally:
+
+            conn.close()
 
     return render_template("register.html")
 
@@ -900,59 +874,42 @@ def logout():
 # ADD EXPENSE
 # ============================================================
 
+@app.route("/add", methods=["POST"])
+@login_required
+def add():
+
+    return add_expense()
+
+
 @app.route("/add_expense", methods=["POST"])
 @login_required
 def add_expense():
 
-    name = request.form.get(
-        "name",
-        ""
+    amount_raw = (
+        request.form.get("amount")
+        or "0"
     ).strip()
 
-    amount = request.form.get(
-        "amount",
-        ""
+    category = (
+        request.form.get("category")
+        or "Other"
     ).strip()
 
-    category = request.form.get(
-        "category",
-        ""
+    description = (
+        request.form.get("description")
+        or request.form.get("name")
+        or ""
     ).strip()
 
-    description = request.form.get(
-        "description",
-        ""
+    expense_date = (
+        request.form.get("expense_date")
+        or request.form.get("date")
+        or date.today().strftime("%Y-%m-%d")
     ).strip()
-
-    expense_date = request.form.get(
-        "expense_date",
-        ""
-    ).strip()
-
-    if not name or not amount or not category:
-
-        flash(
-            "Please fill all required fields.",
-            "error"
-        )
-
-        return redirect(url_for("home"))
-
-    if category not in CATEGORIES:
-
-        flash(
-            "Please select a valid category.",
-            "error"
-        )
-
-        return redirect(url_for("home"))
 
     try:
 
-        amount = float(amount)
-
-        if amount <= 0:
-            raise ValueError
+        amount = float(amount_raw)
 
     except ValueError:
 
@@ -963,13 +920,18 @@ def add_expense():
 
         return redirect(url_for("home"))
 
-    if not expense_date:
-        expense_date = date.today().isoformat()
+    if amount <= 0:
 
-    # THIS FIXES YOUR CURRENT ERROR
-    created_at = datetime.now().strftime(
-        "%Y-%m-%d %H:%M:%S"
-    )
+        flash(
+            "Amount must be greater than zero.",
+            "error"
+        )
+
+        return redirect(url_for("home"))
+
+    if category not in CATEGORIES:
+
+        category = "Other"
 
     conn = get_db()
 
@@ -990,92 +952,20 @@ def add_expense():
         category,
         description,
         expense_date,
-        created_at,
+        datetime.now().strftime(
+            "%Y-%m-%d %H:%M:%S"
+        ),
         session["user_id"],
-        name
+        description
     ))
 
     conn.commit()
     conn.close()
 
     flash(
-        "Expense added successfully! ✅",
+        "Expense added successfully.",
         "success"
     )
-
-    return redirect(url_for("home"))
-
-
-# ============================================================
-# SET BUDGET
-# ============================================================
-
-@app.route("/set_budget", methods=["POST"])
-@login_required
-def set_budget():
-
-    budget = request.form.get(
-        "budget",
-        "0"
-    ).strip()
-
-    try:
-
-        budget = float(budget)
-
-        if budget < 0:
-            raise ValueError
-
-    except ValueError:
-
-        flash(
-            "Please enter a valid budget.",
-            "error"
-        )
-
-        return redirect(url_for("home"))
-
-    save_budget(
-        session["user_id"],
-        budget
-    )
-
-    flash(
-        "Monthly budget updated successfully! ✅",
-        "success"
-    )
-
-    return redirect(url_for("home"))
-
-
-# ============================================================
-# SEARCH
-# ============================================================
-
-@app.route("/search")
-@login_required
-def search():
-
-    query = request.args.get(
-        "q",
-        ""
-    ).strip()
-
-    return redirect(
-        url_for(
-            "home",
-            q=query
-        )
-    )
-
-
-# ============================================================
-# CLEAR SEARCH
-# ============================================================
-
-@app.route("/clear_search")
-@login_required
-def clear_search():
 
     return redirect(url_for("home"))
 
@@ -1084,7 +974,7 @@ def clear_search():
 # DELETE EXPENSE
 # ============================================================
 
-@app.route("/delete_expense/<int:expense_id>")
+@app.route("/delete/<int:expense_id>")
 @login_required
 def delete_expense(expense_id):
 
@@ -1111,13 +1001,10 @@ def delete_expense(expense_id):
 
 
 # ============================================================
-# EDIT EXPENSE
+# EDIT EXPENSE - GET
 # ============================================================
 
-@app.route(
-    "/edit_expense/<int:expense_id>",
-    methods=["GET", "POST"]
-)
+@app.route("/edit/<int:expense_id>", methods=["GET", "POST"])
 @login_required
 def edit_expense(expense_id):
 
@@ -1146,37 +1033,30 @@ def edit_expense(expense_id):
 
     if request.method == "POST":
 
-        name = request.form.get(
-            "name",
-            ""
+        amount_raw = (
+            request.form.get("amount")
+            or "0"
         ).strip()
 
-        amount = request.form.get(
-            "amount",
-            ""
+        category = (
+            request.form.get("category")
+            or "Other"
         ).strip()
 
-        category = request.form.get(
-            "category",
-            ""
+        description = (
+            request.form.get("description")
+            or request.form.get("name")
+            or ""
         ).strip()
 
-        description = request.form.get(
-            "description",
-            ""
-        ).strip()
-
-        expense_date = request.form.get(
-            "expense_date",
-            ""
+        expense_date = (
+            request.form.get("expense_date")
+            or date.today().strftime("%Y-%m-%d")
         ).strip()
 
         try:
 
-            amount = float(amount)
-
-            if amount <= 0:
-                raise ValueError
+            amount = float(amount_raw)
 
         except ValueError:
 
@@ -1196,34 +1076,22 @@ def edit_expense(expense_id):
 
         if category not in CATEGORIES:
 
-            conn.close()
-
-            flash(
-                "Invalid category.",
-                "error"
-            )
-
-            return redirect(
-                url_for(
-                    "edit_expense",
-                    expense_id=expense_id
-                )
-            )
+            category = "Other"
 
         conn.execute("""
             UPDATE expenses
             SET
-                name = ?,
                 amount = ?,
                 category = ?,
                 description = ?,
+                name = ?,
                 expense_date = ?
             WHERE id = ?
             AND user_id = ?
         """, (
-            name,
             amount,
             category,
+            description,
             description,
             expense_date,
             expense_id,
@@ -1234,7 +1102,7 @@ def edit_expense(expense_id):
         conn.close()
 
         flash(
-            "Expense updated successfully! ✅",
+            "Expense updated successfully.",
             "success"
         )
 
@@ -1250,96 +1118,216 @@ def edit_expense(expense_id):
 
 
 # ============================================================
-# DOWNLOAD CSV
+# ALTERNATIVE EDIT ROUTE
 # ============================================================
 
-@app.route("/download_csv")
+@app.route("/edit_expense/<int:expense_id>", methods=["GET", "POST"])
 @login_required
-def download_csv():
+def edit_expense_alt(expense_id):
+
+    return edit_expense(expense_id)
+
+
+# ============================================================
+# SET BUDGET
+# ============================================================
+
+@app.route("/set-budget", methods=["POST"])
+@login_required
+def set_budget():
+
+    amount_raw = (
+        request.form.get("budget")
+        or request.form.get("amount")
+        or "0"
+    ).strip()
+
+    try:
+
+        amount = float(amount_raw)
+
+    except ValueError:
+
+        flash(
+            "Please enter a valid budget.",
+            "error"
+        )
+
+        return redirect(url_for("home"))
+
+    if amount < 0:
+
+        flash(
+            "Budget cannot be negative.",
+            "error"
+        )
+
+        return redirect(url_for("home"))
+
+    set_user_budget(
+        session["user_id"],
+        amount
+    )
+
+    # Also keep budget.txt for local compatibility
+    try:
+
+        with open(
+            BUDGET_FILE,
+            "w",
+            encoding="utf-8"
+        ) as file:
+
+            file.write(str(amount))
+
+    except Exception:
+        pass
+
+    flash(
+        "Monthly budget updated successfully.",
+        "success"
+    )
+
+    return redirect(url_for("home"))
+
+
+# ============================================================
+# SEARCH
+# ============================================================
+
+@app.route("/search")
+@login_required
+def search():
+
+    query = (
+        request.args.get("q")
+        or request.args.get("search")
+        or ""
+    ).strip()
 
     conn = get_db()
 
-    expenses = conn.execute("""
-        SELECT
-            expense_date,
-            name,
-            amount,
-            category,
-            description
-        FROM expenses
-        WHERE user_id = ?
-        ORDER BY expense_date DESC, id DESC
-    """, (
-        session["user_id"],
-    )).fetchall()
+    if query:
+
+        expenses = conn.execute("""
+            SELECT *
+            FROM expenses
+            WHERE user_id = ?
+            AND (
+                description LIKE ?
+                OR name LIKE ?
+                OR category LIKE ?
+            )
+            ORDER BY expense_date DESC, id DESC
+        """, (
+            session["user_id"],
+            f"%{query}%",
+            f"%{query}%",
+            f"%{query}%"
+        )).fetchall()
+
+    else:
+
+        expenses = conn.execute("""
+            SELECT *
+            FROM expenses
+            WHERE user_id = ?
+            ORDER BY expense_date DESC, id DESC
+        """, (
+            session["user_id"],
+        )).fetchall()
 
     conn.close()
 
-    output = io.StringIO()
+    data = calculate_dashboard(
+        session["user_id"]
+    )
 
-    writer = csv.writer(output)
-
-    writer.writerow([
-        "Date",
-        "Name",
-        "Amount",
-        "Category",
-        "Description"
-    ])
-
-    for expense in expenses:
-
-        writer.writerow([
-            expense["expense_date"],
-            expense["name"],
-            expense["amount"],
-            expense["category"],
-            expense["description"] or ""
-        ])
-
-    csv_data = output.getvalue()
-
-    return Response(
-        csv_data,
-        mimetype="text/csv",
-        headers={
-            "Content-Disposition":
-                "attachment; filename=smart_expenses.csv"
+    return render_template(
+        "index.html",
+        categories=CATEGORIES,
+        expenses=expenses,
+        search_query=query,
+        category_data=data["category_totals"],
+        monthly_data={
+            "labels": data["monthly_labels"],
+            "totals": data["monthly_totals"]
+        },
+        **{
+            key: value
+            for key, value in data.items()
+            if key != "expenses"
         }
     )
 
 
 # ============================================================
-# START APPLICATION
+# HEALTH CHECK FOR RENDER
+# ============================================================
+
+@app.route("/health")
+def health():
+
+    try:
+
+        conn = get_db()
+
+        conn.execute(
+            "SELECT 1"
+        ).fetchone()
+
+        conn.close()
+
+        return {
+            "status": "ok",
+            "database": "connected"
+        }
+
+    except Exception as error:
+
+        return {
+            "status": "error",
+            "message": str(error)
+        }, 500
+
+
+# ============================================================
+# LOCAL DEVELOPMENT
 # ============================================================
 
 if __name__ == "__main__":
-
-    init_db()
 
     print()
     print("==========================================")
     print("       SMART EXPENSE TRACKER")
     print("==========================================")
     print()
+
     print("Default Admin Login:")
     print("Username: admin")
     print("Password: admin123")
     print()
+
     print("Register:")
     print("http://127.0.0.1:5000/register")
     print()
+
     print("Login:")
     print("http://127.0.0.1:5000/login")
     print()
+
     print("Dashboard:")
     print("http://127.0.0.1:5000/")
-    print("==========================================")
+    print()
+
+    print("Health:")
+    print("http://127.0.0.1:5000/health")
     print()
 
     app.run(
-        debug=True,
-        host="127.0.0.1",
-        port=5000
+        host="0.0.0.0",
+        port=int(
+            os.environ.get("PORT", 5000)
+        ),
+        debug=True
     )
-
