@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+expenses.db
+smart_expense.db
+*.db
+budget.txt
+app_backup.py

@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Edit Expense - Smart Expense Tracker</title>
+
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: Arial, Helvetica, sans-serif;
+            background: #f4f7fb;
+            color: #1f2937;
+        }
+
+        .container {
+            width: 95%;
+            max-width: 650px;
+            margin: auto;
+        }
+
+        header {
+            background: linear-gradient(135deg, #4f46e5, #7c3aed);
+            color: white;
+            padding: 25px 0;
+            margin-bottom: 35px;
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.12);
+        }
+
+        .header-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 15px;
+        }
+
+        h1 {
+            font-size: 28px;
+        }
+
+        .subtitle {
+            margin-top: 6px;
+            opacity: 0.9;
+        }
+
+        .user-info {
+            background: rgba(255, 255, 255, 0.15);
+            padding: 10px 14px;
+            border-radius: 9px;
+            font-size: 14px;
+        }
+
+        .card {
+            background: white;
+            border-radius: 16px;
+            padding: 30px;
+            box-shadow: 0 5px 18px rgba(0, 0, 0, 0.07);
+        }
+
+        .card h2 {
+            margin-bottom: 25px;
+        }
+
+        .form-group {
+            margin-bottom: 18px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 7px;
+            font-weight: bold;
+            font-size: 14px;
+        }
+
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            width: 100%;
+            padding: 13px;
+            border: 1px solid #d1d5db;
+            border-radius: 9px;
+            font-size: 15px;
+            outline: none;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus,
+        .form-group textarea:focus {
+            border-color: #4f46e5;
+        }
+
+        .form-group textarea {
+            min-height: 100px;
+            resize: vertical;
+        }
+
+        .buttons {
+            display: flex;
+            gap: 12px;
+            margin-top: 25px;
+        }
+
+        .btn {
+            flex: 1;
+            border: none;
+            padding: 13px 20px;
+            border-radius: 9px;
+            background: #4f46e5;
+            color: white;
+            font-size: 15px;
+            font-weight: bold;
+            cursor: pointer;
+            text-align: center;
+            text-decoration: none;
+        }
+
+        .btn:hover {
+            background: #4338ca;
+        }
+
+        .cancel-btn {
+            background: #6b7280;
+        }
+
+        .cancel-btn:hover {
+            background: #4b5563;
+        }
+
+        .expense-info {
+            background: #f8fafc;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 22px;
+            color: #6b7280;
+            font-size: 14px;
+        }
+
+        footer {
+            text-align: center;
+            padding: 30px;
+            color: #6b7280;
+            font-size: 14px;
+        }
+
+        @media (max-width: 600px) {
+
+            .header-content {
+                flex-direction: column;
+                text-align: center;
+            }
+
+            .buttons {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+<header>
+
+    <div class="container">
+
+        <div class="header-content">
+
+            <div>
+                <h1>💰 Smart Expense Tracker</h1>
+
+                <p class="subtitle">
+                    Edit your expense
+                </p>
+            </div>
+
+            <div class="user-info">
+                👤
+                <strong>{{ username }}</strong>
+            </div>
+
+        </div>
+
+    </div>
+
+</header>
+
+
+<div class="container">
+
+    <div class="card">
+
+        <h2>✏️ Edit Expense</h2>
+
+        <div class="expense-info">
+            You are editing expense #{{ expense.id }}
+        </div>
+
+
+        <form
+            action="{{ url_for('edit_expense', expense_id=expense.id) }}"
+            method="POST"
+        >
+
+            <!-- AMOUNT -->
+
+            <div class="form-group">
+
+                <label>
+                    Amount *
+                </label>
+
+                <input
+                    type="number"
+                    name="amount"
+                    step="0.01"
+                    min="0"
+                    value="{{ expense.amount }}"
+                    required
+                >
+
+            </div>
+
+
+            <!-- CATEGORY -->
+
+            <div class="form-group">
+
+                <label>
+                    Category *
+                </label>
+
+                <select
+                    name="category"
+                    required
+                >
+
+                    <option value="">
+                        Select category
+                    </option>
+
+                    <option
+                        value="Food"
+                        {% if expense.category == "Food" %}selected{% endif %}
+                    >
+                        🍔 Food
+                    </option>
+
+                    <option
+                        value="Travel"
+                        {% if expense.category == "Travel" %}selected{% endif %}
+                    >
+                        🚗 Travel
+                    </option>
+
+                    <option
+                        value="Shopping"
+                        {% if expense.category == "Shopping" %}selected{% endif %}
+                    >
+                        🛍️ Shopping
+                    </option>
+
+                    <option
+                        value="Bills"
+                        {% if expense.category == "Bills" %}selected{% endif %}
+                    >
+                        💡 Bills
+                    </option>
+
+                    <option
+                        value="Entertainment"
+                        {% if expense.category == "Entertainment" %}selected{% endif %}
+                    >
+                        🎬 Entertainment
+                    </option>
+
+                    <option
+                        value="Health"
+                        {% if expense.category == "Health" %}selected{% endif %}
+                    >
+                        ❤️ Health
+                    </option>
+
+                    <option
+                        value="Education"
+                        {% if expense.category == "Education" %}selected{% endif %}
+                    >
+                        📚 Education
+                    </option>
+
+                    <option
+                        value="Other"
+                        {% if expense.category == "Other" %}selected{% endif %}
+                    >
+                        📦 Other
+                    </option>
+
+                </select>
+
+            </div>
+
+
+            <!-- DESCRIPTION -->
+
+            <div class="form-group">
+
+                <label>
+                    Description
+                </label>
+
+                <textarea
+                    name="description"
+                    placeholder="What did you spend on?"
+                >{{ expense.description or "" }}</textarea>
+
+            </div>
+
+
+            <!-- DATE -->
+
+            <div class="form-group">
+
+                <label>
+                    Date *
+                </label>
+
+                <input
+                    type="date"
+                    name="expense_date"
+                    value="{{ expense.expense_date }}"
+                    required
+                >
+
+            </div>
+
+
+            <!-- BUTTONS -->
+
+            <div class="buttons">
+
+                <button
+                    type="submit"
+                    class="btn"
+                >
+                    💾 Update Expense
+                </button>
+
+                <a
+                    href="{{ url_for('home') }}"
+                    class="btn cancel-btn"
+                >
+                    ❌ Cancel
+                </a>
+
+            </div>
+
+        </form>
+
+    </div>
+
+</div>
+
+
+<footer>
+
+    <p>
+        Smart Expense Tracker © 2026
+    </p>
+
+    <p style="margin-top:5px;">
+        Built with Python + Flask + SQLite
+    </p>
+
+</footer>
+
+</body>
+
+</html>

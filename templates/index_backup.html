@@ -1,0 +1,1379 @@
+```html
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta
+        name="viewport"
+        content="width=device-width, initial-scale=1.0"
+    >
+
+    <title>Smart Expense Tracker</title>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: Arial, sans-serif;
+        }
+
+        body {
+            background: #f4f7fb;
+            color: #111827;
+        }
+
+        /* NAVBAR */
+
+        .navbar {
+            background: linear-gradient(
+                135deg,
+                #111827,
+                #2563eb
+            );
+
+            color: white;
+            padding: 18px 35px;
+
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .navbar h1 {
+            font-size: 24px;
+        }
+
+        .nav-right {
+            display: flex;
+            align-items: center;
+            gap: 18px;
+        }
+
+        .logout {
+            color: white;
+            text-decoration: none;
+
+            background: #ef4444;
+
+            padding: 9px 16px;
+
+            border-radius: 7px;
+
+            font-weight: bold;
+        }
+
+        .logout:hover {
+            background: #dc2626;
+        }
+
+        /* CONTAINER */
+
+        .container {
+            width: 92%;
+            max-width: 1400px;
+            margin: 30px auto;
+        }
+
+        .welcome {
+            margin-bottom: 25px;
+        }
+
+        .welcome h2 {
+            font-size: 30px;
+            margin-bottom: 7px;
+        }
+
+        .welcome p {
+            color: #6b7280;
+        }
+
+        /* CARDS */
+
+        .cards {
+            display: grid;
+
+            grid-template-columns:
+                repeat(4, 1fr);
+
+            gap: 20px;
+
+            margin-bottom: 30px;
+        }
+
+        .card {
+            background: white;
+
+            padding: 24px;
+
+            border-radius: 15px;
+
+            box-shadow:
+                0 5px 18px
+                rgba(0, 0, 0, 0.08);
+        }
+
+        .card h3 {
+            color: #6b7280;
+
+            font-size: 14px;
+
+            margin-bottom: 12px;
+
+            text-transform: uppercase;
+        }
+
+        .amount {
+            font-size: 28px;
+            font-weight: bold;
+        }
+
+        .blue {
+            border-left: 5px solid #2563eb;
+        }
+
+        .green {
+            border-left: 5px solid #10b981;
+        }
+
+        .orange {
+            border-left: 5px solid #f59e0b;
+        }
+
+        .red {
+            border-left: 5px solid #ef4444;
+        }
+
+        /* SECTION */
+
+        .section {
+            background: white;
+
+            padding: 25px;
+
+            border-radius: 15px;
+
+            margin-bottom: 25px;
+
+            box-shadow:
+                0 5px 18px
+                rgba(0, 0, 0, 0.07);
+        }
+
+        .section h2 {
+            margin-bottom: 8px;
+        }
+
+        .section-subtitle {
+            color: #6b7280;
+            margin-bottom: 20px;
+        }
+
+        /* INPUTS */
+
+        input,
+        select {
+            width: 100%;
+
+            padding: 13px 14px;
+
+            border-radius: 8px;
+
+            border: 1px solid #cbd5e1;
+
+            font-size: 15px;
+
+            color: #111827;
+
+            background: white;
+        }
+
+        input:focus,
+        select:focus {
+            outline: none;
+
+            border: 2px solid #2563eb;
+
+            box-shadow:
+                0 0 0 3px
+                rgba(37, 99, 235, 0.12);
+        }
+
+        /* ADD FORM */
+
+        .form-grid {
+            display: grid;
+
+            grid-template-columns:
+                repeat(4, 1fr);
+
+            gap: 15px;
+        }
+
+        button {
+            width: 100%;
+
+            padding: 13px;
+
+            border-radius: 8px;
+
+            border: none;
+
+            background:
+                linear-gradient(
+                    90deg,
+                    #2563eb,
+                    #1d4ed8
+                );
+
+            color: white;
+
+            cursor: pointer;
+
+            font-size: 15px;
+
+            font-weight: bold;
+        }
+
+        button:hover {
+            background: #1e40af;
+        }
+
+        /* CATEGORY ICON BOX */
+
+        .category-help {
+            margin-top: 15px;
+
+            display: grid;
+
+            grid-template-columns:
+                repeat(4, 1fr);
+
+            gap: 10px;
+        }
+
+        .category-item {
+            background: #f8fafc;
+
+            border: 1px solid #e5e7eb;
+
+            padding: 12px;
+
+            border-radius: 10px;
+
+            text-align: center;
+
+            font-size: 14px;
+        }
+
+        /* BUDGET */
+
+        .budget-form {
+            display: flex;
+
+            gap: 12px;
+
+            max-width: 650px;
+        }
+
+        .budget-form input {
+            flex: 1;
+        }
+
+        .budget-form button {
+            max-width: 200px;
+        }
+
+        .budget-info {
+            margin-top: 20px;
+
+            padding: 18px;
+
+            border-radius: 10px;
+
+            background: #f8fafc;
+        }
+
+        .budget-info p {
+            margin-bottom: 8px;
+        }
+
+        .safe {
+            border-left: 5px solid #10b981;
+        }
+
+        .warning {
+            border-left: 5px solid #f59e0b;
+        }
+
+        .danger {
+            border-left: 5px solid #ef4444;
+        }
+
+        .none {
+            border-left: 5px solid #6b7280;
+        }
+
+        /* PROGRESS */
+
+        .progress-container {
+            width: 100%;
+
+            height: 12px;
+
+            background: #e5e7eb;
+
+            border-radius: 20px;
+
+            overflow: hidden;
+
+            margin-top: 15px;
+        }
+
+        .progress-bar {
+            height: 100%;
+
+            background:
+                linear-gradient(
+                    90deg,
+                    #2563eb,
+                    #10b981
+                );
+
+            border-radius: 20px;
+        }
+
+        /* SEARCH */
+
+        .search-box {
+            display: flex;
+
+            gap: 12px;
+        }
+
+        .search-box input {
+            flex: 1;
+        }
+
+        .search-box button {
+            max-width: 160px;
+        }
+
+        /* TABLE */
+
+        .table-wrapper {
+            overflow-x: auto;
+        }
+
+        table {
+            width: 100%;
+
+            border-collapse: collapse;
+
+            margin-top: 15px;
+        }
+
+        th,
+        td {
+            padding: 14px;
+
+            border-bottom:
+                1px solid #e5e7eb;
+
+            text-align: left;
+        }
+
+        th {
+            background: #f8fafc;
+            color: #374151;
+        }
+
+        tr:hover {
+            background: #f9fafb;
+        }
+
+        .badge {
+            display: inline-block;
+
+            padding: 6px 10px;
+
+            border-radius: 20px;
+
+            font-size: 12px;
+
+            font-weight: bold;
+
+            background: #dbeafe;
+
+            color: #1d4ed8;
+        }
+
+        .delete-btn {
+            background: #ef4444;
+
+            color: white;
+
+            padding: 7px 12px;
+
+            border-radius: 6px;
+
+            text-decoration: none;
+
+            font-size: 13px;
+
+            display: inline-block;
+        }
+
+        .delete-btn:hover {
+            background: #dc2626;
+        }
+
+        .edit-btn {
+            background: #2563eb;
+
+            color: white;
+
+            padding: 7px 12px;
+
+            border-radius: 6px;
+
+            text-decoration: none;
+
+            font-size: 13px;
+
+            display: inline-block;
+
+            margin-right: 5px;
+        }
+
+        /* CHARTS */
+
+        .charts {
+            display: grid;
+
+            grid-template-columns:
+                1fr 1fr;
+
+            gap: 25px;
+        }
+
+        .chart-box {
+            background: white;
+
+            padding: 25px;
+
+            border-radius: 15px;
+
+            box-shadow:
+                0 5px 18px
+                rgba(0, 0, 0, 0.07);
+        }
+
+        .chart-box canvas {
+            max-height: 350px;
+        }
+
+        /* FLASH */
+
+        .flash {
+            padding: 14px 18px;
+
+            margin-bottom: 20px;
+
+            border-radius: 8px;
+
+            font-weight: bold;
+        }
+
+        .flash.success {
+            background: #d1fae5;
+            color: #065f46;
+        }
+
+        .flash.error {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+
+        .empty {
+            text-align: center;
+
+            padding: 35px;
+
+            color: #6b7280;
+        }
+
+        /* RESPONSIVE */
+
+        @media (max-width: 1000px) {
+
+            .cards {
+                grid-template-columns:
+                    repeat(2, 1fr);
+            }
+
+            .form-grid {
+                grid-template-columns:
+                    repeat(2, 1fr);
+            }
+
+            .category-help {
+                grid-template-columns:
+                    repeat(2, 1fr);
+            }
+
+            .charts {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 600px) {
+
+            .cards {
+                grid-template-columns: 1fr;
+            }
+
+            .form-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .category-help {
+                grid-template-columns: 1fr 1fr;
+            }
+
+            .navbar {
+                padding: 15px;
+
+                flex-direction: column;
+
+                gap: 12px;
+            }
+
+            .nav-right {
+                width: 100%;
+
+                justify-content:
+                    space-between;
+            }
+
+            .container {
+                width: 95%;
+            }
+
+            .budget-form,
+            .search-box {
+                flex-direction: column;
+
+                max-width: 100%;
+            }
+
+            .budget-form button,
+            .search-box button {
+                max-width: 100%;
+            }
+        }
+
+    </style>
+
+</head>
+
+
+<body>
+
+    <!-- NAVBAR -->
+
+    <div class="navbar">
+
+        <h1>
+            💰 Smart Expense Tracker
+        </h1>
+
+        <div class="nav-right">
+
+            <span>
+                Welcome,
+                {{ username }}
+            </span>
+
+            <a
+                href="{{ url_for('logout') }}"
+                class="logout"
+            >
+                Logout
+            </a>
+
+        </div>
+
+    </div>
+
+
+    <div class="container">
+
+        <!-- FLASH -->
+
+        {% with
+            messages =
+            get_flashed_messages(
+                with_categories=true
+            )
+        %}
+
+            {% if messages %}
+
+                {% for category, message in messages %}
+
+                    <div
+                        class="flash {{ category }}"
+                    >
+                        {{ message }}
+                    </div>
+
+                {% endfor %}
+
+            {% endif %}
+
+        {% endwith %}
+
+
+        <!-- WELCOME -->
+
+        <div class="welcome">
+
+            <h2>
+                Dashboard 📊
+            </h2>
+
+            <p>
+                Track your spending,
+                manage your budget and
+                understand your financial habits.
+            </p>
+
+        </div>
+
+
+        <!-- SUMMARY CARDS -->
+
+        <div class="cards">
+
+            <div class="card blue">
+
+                <h3>
+                    Total Expense
+                </h3>
+
+                <div class="amount">
+                    ₹{{ "%.2f"|format(
+                        total_expense or 0
+                    ) }}
+                </div>
+
+            </div>
+
+
+            <div class="card green">
+
+                <h3>
+                    {{ previous_month }}
+                </h3>
+
+                <div class="amount">
+                    ₹{{ "%.2f"|format(
+                        previous_month_total or 0
+                    ) }}
+                </div>
+
+            </div>
+
+
+            <div class="card orange">
+
+                <h3>
+                    Current Month
+                </h3>
+
+                <div class="amount">
+                    ₹{{ "%.2f"|format(
+                        current_month_total or 0
+                    ) }}
+                </div>
+
+            </div>
+
+
+            <div class="card red">
+
+                <h3>
+                    Today's Expense
+                </h3>
+
+                <div class="amount">
+                    ₹{{ "%.2f"|format(
+                        today_total or 0
+                    ) }}
+                </div>
+
+            </div>
+
+        </div>
+
+
+        <!-- ADD EXPENSE -->
+
+        <div class="section">
+
+            <h2>
+                ➕ Add New Expense
+            </h2>
+
+            <p class="section-subtitle">
+                Record your daily spending
+            </p>
+
+
+            <form
+                action="{{ url_for('add_expense') }}"
+                method="POST"
+            >
+
+                <div class="form-grid">
+
+                    <input
+                        type="text"
+                        name="name"
+                        placeholder="Expense Name"
+                        required
+                    >
+
+
+                    <input
+                        type="number"
+                        name="amount"
+                        placeholder="Amount ₹"
+                        step="0.01"
+                        min="0.01"
+                        required
+                    >
+
+
+                    <select
+                        name="category"
+                        required
+                    >
+
+                        <option value="">
+                            Select Category
+                        </option>
+
+                        <option value="Food">
+                            🍔 Food
+                        </option>
+
+                        <option value="Travel">
+                            ✈️ Travel
+                        </option>
+
+                        <option value="Shopping">
+                            🛍️ Shopping
+                        </option>
+
+                        <option value="Bills">
+                            🧾 Bills
+                        </option>
+
+                        <option value="Education">
+                            📚 Education
+                        </option>
+
+                        <option value="Entertainment">
+                            🎮 Entertainment
+                        </option>
+
+                        <option value="Health">
+                            🏥 Health
+                        </option>
+
+                        <option value="Other">
+                            📦 Other
+                        </option>
+
+                    </select>
+
+
+                    <input
+                        type="date"
+                        name="expense_date"
+                        value="{{ today_date }}"
+                        required
+                    >
+
+                </div>
+
+
+                <br>
+
+
+                <input
+                    type="text"
+                    name="description"
+                    placeholder="Description e.g. Pizza, Bus ticket, Shopping..."
+                >
+
+
+                <br><br>
+
+
+                <button type="submit">
+                    ➕ Add Expense
+                </button>
+
+            </form>
+
+
+            <!-- CATEGORY ICONS -->
+
+            <div class="category-help">
+
+                <div class="category-item">
+                    🍔<br>Food
+                </div>
+
+                <div class="category-item">
+                    ✈️<br>Travel
+                </div>
+
+                <div class="category-item">
+                    🛍️<br>Shopping
+                </div>
+
+                <div class="category-item">
+                    🧾<br>Bills
+                </div>
+
+                <div class="category-item">
+                    📚<br>Education
+                </div>
+
+                <div class="category-item">
+                    🎮<br>Entertainment
+                </div>
+
+                <div class="category-item">
+                    🏥<br>Health
+                </div>
+
+                <div class="category-item">
+                    📦<br>Other
+                </div>
+
+            </div>
+
+        </div>
+
+
+        <!-- BUDGET -->
+
+        <div class="section">
+
+            <h2>
+                💰 Smart Monthly Budget
+            </h2>
+
+            <p class="section-subtitle">
+                Keep your monthly spending under control
+            </p>
+
+
+            <form
+                action="{{ url_for('set_budget') }}"
+                method="POST"
+                class="budget-form"
+            >
+
+                <input
+                    type="number"
+                    name="budget"
+                    placeholder="Enter monthly budget ₹"
+                    step="0.01"
+                    min="0"
+                    value="{% if monthly_budget > 0 %}{{ monthly_budget }}{% endif %}"
+                    required
+                >
+
+                <button type="submit">
+                    Set Budget
+                </button>
+
+            </form>
+
+
+            <div
+                class="budget-info {{ budget_status }}"
+            >
+
+                {% if monthly_budget > 0 %}
+
+                    <p>
+                        <strong>
+                            Budget:
+                        </strong>
+
+                        ₹{{ "%.2f"|format(
+                            monthly_budget
+                        ) }}
+                    </p>
+
+
+                    <p>
+                        <strong>
+                            Used:
+                        </strong>
+
+                        ₹{{ "%.2f"|format(
+                            budget_used
+                        ) }}
+                    </p>
+
+
+                    <p>
+                        <strong>
+                            Remaining:
+                        </strong>
+
+                        ₹{{ "%.2f"|format(
+                            budget_remaining
+                        ) }}
+                    </p>
+
+
+                    <p>
+                        <strong>
+                            Used:
+                        </strong>
+
+                        {{ "%.1f"|format(
+                            budget_percentage
+                        ) }}%
+                    </p>
+
+
+                    <div class="progress-container">
+
+                        <div
+                            class="progress-bar"
+                            style="
+                                width:
+                                {{ [budget_percentage, 100]|min }}%;
+                            "
+                        ></div>
+
+                    </div>
+
+                {% else %}
+
+                    <p>
+                        No monthly budget set yet.
+                    </p>
+
+                {% endif %}
+
+            </div>
+
+        </div>
+
+
+        <!-- SEARCH -->
+
+        <div class="section">
+
+            <h2>
+                🔎 Search Expenses
+            </h2>
+
+            <p class="section-subtitle">
+                Search by name, category or description
+            </p>
+
+
+            <form
+                action="{{ url_for('search') }}"
+                method="GET"
+                class="search-box"
+            >
+
+                <input
+                    type="text"
+                    name="q"
+                    value="{{ search_query or '' }}"
+                    placeholder="Search Food, Shopping, Pizza..."
+                    autocomplete="off"
+                >
+
+                <button type="submit">
+                    🔎 Search
+                </button>
+
+            </form>
+
+        </div>
+
+
+        <!-- EXPENSE HISTORY -->
+
+        <div class="section">
+
+            <h2>
+                📋 Expense History
+            </h2>
+
+            <p class="section-subtitle">
+                Your recorded transactions
+            </p>
+
+
+            {% if expenses %}
+
+                <div class="table-wrapper">
+
+                    <table>
+
+                        <thead>
+
+                            <tr>
+
+                                <th>
+                                    Date
+                                </th>
+
+                                <th>
+                                    Name
+                                </th>
+
+                                <th>
+                                    Category
+                                </th>
+
+                                <th>
+                                    Description
+                                </th>
+
+                                <th>
+                                    Amount
+                                </th>
+
+                                <th>
+                                    Action
+                                </th>
+
+                            </tr>
+
+                        </thead>
+
+
+                        <tbody>
+
+                            {% for expense in expenses %}
+
+                                <tr>
+
+                                    <td>
+                                        {{ expense["expense_date"] }}
+                                    </td>
+
+
+                                    <td>
+                                        <strong>
+                                            {{ expense["name"] }}
+                                        </strong>
+                                    </td>
+
+
+                                    <td>
+
+                                        <span class="badge">
+
+                                            {% if expense["category"] == "Food" %}
+                                                🍔
+                                            {% elif expense["category"] == "Travel" %}
+                                                ✈️
+                                            {% elif expense["category"] == "Shopping" %}
+                                                🛍️
+                                            {% elif expense["category"] == "Bills" %}
+                                                🧾
+                                            {% elif expense["category"] == "Education" %}
+                                                📚
+                                            {% elif expense["category"] == "Entertainment" %}
+                                                🎮
+                                            {% elif expense["category"] == "Health" %}
+                                                🏥
+                                            {% else %}
+                                                📦
+                                            {% endif %}
+
+                                            {{ expense["category"] }}
+
+                                        </span>
+
+                                    </td>
+
+
+                                    <td>
+                                        {{ expense["description"] or "-" }}
+                                    </td>
+
+
+                                    <td>
+
+                                        <strong>
+                                            ₹{{ "%.2f"|format(
+                                                expense["amount"]
+                                            ) }}
+                                        </strong>
+
+                                    </td>
+
+
+                                    <td>
+
+                                        <a
+                                            href="{{ url_for(
+                                                'edit_expense',
+                                                expense_id=expense['id']
+                                            ) }}"
+                                            class="edit-btn"
+                                        >
+                                            ✏️ Edit
+                                        </a>
+
+
+                                        <a
+                                            href="{{ url_for(
+                                                'delete_expense',
+                                                expense_id=expense['id']
+                                            ) }}"
+                                            class="delete-btn"
+                                            onclick="
+                                                return confirm(
+                                                    'Are you sure you want to delete this expense?'
+                                                );
+                                            "
+                                        >
+                                            🗑 Delete
+                                        </a>
+
+                                    </td>
+
+                                </tr>
+
+                            {% endfor %}
+
+                        </tbody>
+
+                    </table>
+
+                </div>
+
+            {% else %}
+
+                <div class="empty">
+
+                    <h3>
+                        No expenses found
+                    </h3>
+
+                    <p>
+                        Add your first expense above.
+                    </p>
+
+                </div>
+
+            {% endif %}
+
+        </div>
+
+
+        <!-- CHARTS -->
+
+        <div class="charts">
+
+
+            <!-- CATEGORY CHART -->
+
+            <div class="chart-box">
+
+                <h2>
+                    📊 Expenses by Category
+                </h2>
+
+                <p class="section-subtitle">
+                    Understand where your money goes
+                </p>
+
+                <canvas
+                    id="categoryChart"
+                ></canvas>
+
+            </div>
+
+
+            <!-- MONTHLY CHART -->
+
+            <div class="chart-box">
+
+                <h2>
+                    📈 Last 6 Months
+                </h2>
+
+                <p class="section-subtitle">
+                    Monthly spending trend
+                </p>
+
+                <canvas
+                    id="monthlyChart"
+                ></canvas>
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <!-- CHART JS -->
+
+    <script>
+
+        const categories =
+            {{ categories | default([]) | tojson }};
+
+        const categoryTotals =
+            {{ category_totals | default([]) | tojson }};
+
+        const monthlyLabels =
+            {{ monthly_labels | default([]) | tojson }};
+
+        const monthlyTotals =
+            {{ monthly_totals | default([]) | tojson }};
+
+
+        // CATEGORY CHART
+
+        const categoryCanvas =
+            document.getElementById(
+                "categoryChart"
+            );
+
+
+        if (categoryCanvas) {
+
+            new Chart(
+                categoryCanvas,
+                {
+                    type: "doughnut",
+
+                    data: {
+
+                        labels:
+                            categories,
+
+                        datasets: [
+                            {
+                                label:
+                                    "Expenses",
+
+                                data:
+                                    categoryTotals
+                            }
+                        ]
+                    },
+
+                    options: {
+
+                        responsive: true,
+
+                        plugins: {
+
+                            legend: {
+
+                                position:
+                                    "bottom"
+                            }
+                        }
+                    }
+                }
+            );
+
+        }
+
+
+        // MONTHLY CHART
+
+        const monthlyCanvas =
+            document.getElementById(
+                "monthlyChart"
+            );
+
+
+        if (monthlyCanvas) {
+
+            new Chart(
+                monthlyCanvas,
+                {
+                    type: "bar",
+
+                    data: {
+
+                        labels:
+                            monthlyLabels,
+
+                        datasets: [
+                            {
+                                label:
+                                    "Monthly Expense ₹",
+
+                                data:
+                                    monthlyTotals
+                            }
+                        ]
+                    },
+
+                    options: {
+
+                        responsive: true,
+
+                        scales: {
+
+                            y: {
+
+                                beginAtZero:
+                                    true,
+
+                                ticks: {
+
+                                    callback:
+                                        function(value) {
+
+                                            return "₹" + value;
+
+                                        }
+                                }
+                            }
+                        }
+                    }
+                }
+            );
+
+        }
+
+    </script>
+
+</body>
+
+</html>
+```
